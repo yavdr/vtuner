@@ -52,7 +52,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff,
 	if (down_interruptible(&ctx->tswrite_sem))
 		return -ERESTARTSYS;
 
-        if ((ctx->vmalloc_area != NULL) && (vmalloc_area_len >= len))
+        if ((ctx->vmalloc_area != NULL) && (ctx->vmalloc_area_len >= len))
         {
 	  kernel_buf = (char *)ctx->vmalloc_area;
         }
@@ -96,7 +96,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff,
 	/* TODO:  analyze injected data for statistics */
 #endif
 
-        if ((ctx->vmalloc_area == NULL) || (vmalloc_area_len < len))
+        if ((ctx->vmalloc_area == NULL) || (ctx->vmalloc_area_len < len))
 	  kfree(kernel_buf);
 
 	return len;
@@ -141,6 +141,7 @@ static int vtunerc_ctrldev_mmap(struct file *filp, struct vm_area_struct *vma)
         unsigned long start = vma->vm_start;
         char *vmalloc_area_ptr = (char *)ctx->vmalloc_area;
         unsigned long pfn;
+	int i;
 
         /* allocate a memory area with vmalloc. */
         if ((ctx->vmalloc_area = (int *)vmalloc(length)) == NULL) {
@@ -174,6 +175,7 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 	struct vtunerc_ctx *ctx = filp->private_data;
 	int minor;
 	struct vtuner_message fakemsg;
+	int i;
 
 	ctx->fd_opened--;
 	ctx->closing = 1;
@@ -192,17 +194,14 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 	vtunerc_ctrldev_xchange_message(ctx, &fakemsg, 0);
 	up(&ctx->xchange_sem);
 
-        if (vma)
+        if (ctx->vmalloc_area)
         {
           /* unreserve the pages */
           for (i = 0; i < ctx->vmalloc_area_len; i+= PAGE_SIZE) {
                   SetPageReserved(vmalloc_to_page((void *)(((unsigned long)ctx->vmalloc_area) + i)));
           }
-          if (ctx->vmalloc_area)
-          {
-            /* free the memory areas */
-            vfree(ctx->vmalloc_area);
-          }
+          /* free the memory areas */
+          vfree(ctx->vmalloc_area);
         }
 
 	return 0;
