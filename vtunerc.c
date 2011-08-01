@@ -5,6 +5,7 @@
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/mman.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -59,9 +60,11 @@ void *tsdata_worker(void *d) {
   // need to have a buffer greater than this to detect if we're
   // receiving to slow
   int rmax=696*TS_PKT_LEN;
-  unsigned char buf[(696+100)*TS_PKT_LEN];
-  unsigned char *readptr = buf;
-  unsigned char *writeptr = buf;
+  int bufsiz = (696+100)*TS_PKT_LEN;
+  unsigned char buf[bufsiz];
+  unsigned char *bufptr;
+  unsigned char *readptr;
+  unsigned char *writeptr;
   int bytesread = 0;
   int bytesreadsum = 0;
   int bytesreadsumcnt = 0;
@@ -77,7 +80,13 @@ void *tsdata_worker(void *d) {
   int delay=50; //ms to sleep after each write
   int delay2long = MAX_DELAY;
 
-
+  if ((bufptr = mmap(0, bufsiz, PROT_READ, MAP_SHARED, data->out, 0)) == MAP_FAILED)
+  {
+    ERROR("Memory mapping failed, using normal buffering: %m.\n");
+    bufptr = buf;
+  }
+  readptr = writeptr = bufptr;
+ 
   while(data->status == DST_RUNNING) {
     struct pollfd pfd[] = { { data->in, POLLIN, 0 } };
     // don't poll forever to catch data->status != DST_RUNNING
@@ -90,8 +99,8 @@ void *tsdata_worker(void *d) {
 
       unsigned char *ptr;
 
-      for (offset = 0, offsetfound = 0; offset < sizeof(buf) - TS_PKT_LEN; offset++) {
-        if ((buf[offset] == TS_HDR_SYNC) && (buf[offset + TS_PKT_LEN] == TS_HDR_SYNC)) {
+      for (offset = 0, offsetfound = 0; offset < bufsiz - TS_PKT_LEN; offset++) {
+        if ((bufptr[offset] == TS_HDR_SYNC) && (bufptr[offset + TS_PKT_LEN] == TS_HDR_SYNC)) {
           offsetfound = 1;
           break;
         }
@@ -99,16 +108,16 @@ void *tsdata_worker(void *d) {
 
       if (!offsetfound) {
         ERROR("start of TS packet not found, throwing buffer away.\n");
-        readptr = buf;
+        readptr = bufptr;
         bytesread = 0;
-        bytes2read = sizeof(buf);
+        bytes2read = bufsiz;
         tail = 0;
         continue;
       } 
 
       if (offset)
         DEBUGMAIN("offset to TS packet %d bytes.\n", offset);
-      writeptr = buf + offset;
+      writeptr = bufptr + offset;
       tail = (bytesread - offset) % TS_PKT_LEN;
       bytes2write = bytesread - offset - tail;
 
@@ -170,10 +179,10 @@ void *tsdata_worker(void *d) {
           // data to be received in between 
           usleep(delay*1000);
         }
-        memmove(buf, readptr - tail, tail);
-        readptr = buf + tail;
+        memmove(bufptr, readptr - tail, tail);
+        readptr = bufptr + tail;
         bytesread = tail;
-        bytes2read = sizeof(buf) - tail ;
+        bytes2read = bufsiz - tail;
       }
     }
   }
