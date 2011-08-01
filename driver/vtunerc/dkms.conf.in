@@ -1,0 +1,5 @@
+PACKAGE_NAME=vtunerc
+PACKAGE_VERSION=#VERSION#
+AUTOINSTALL=y
+MAKE[0]="make -j5 KDIR=/lib/modules/$kernelver/build"
+DEST_MODULE_LOCATION[0]=/updates/dkms

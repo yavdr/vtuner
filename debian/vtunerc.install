@@ -1,0 +1,2 @@
+vtunerc /usr/bin
+debian/vtunerc.conf /etc/init

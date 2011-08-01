@@ -1,0 +1,33 @@
+Source: vtuner
+Section: misc
+Priority: extra
+Maintainer: Gerald Dachs <gda@dachsweb.de>
+Build-Depends: debhelper (>= 7.0.50~)
+Standards-Version: 3.9.1
+#Vcs-Git: git://git.debian.org/collab-maint/dreamtuner.git
+#Vcs-Browser: http://git.debian.org/?p=collab-maint/dreamtuner.git;a=summary
+
+Package: vtunerd
+Architecture: any
+Replaces: dreamtuner-vtunerd
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: dreamtuner vtuner daemon
+ dreamtuner vtuner daemon
+
+Package: vtunerc
+Architecture: any
+Replaces: dreamtuner-vtunerc
+Depends: ${shlibs:Depends}, ${misc:Depends}, vtunerc-dkms
+Description: dreamtuner vtuner client
+ dreamtuner vtuner client
+
+Package: vtuner-doc
+Architecture: all
+Replaces: dreamtuner-doc
+Description: documentation for dreamtuner
+ documentation for dreamtuner
+
+Package: vtunerc-dkms
+Architecture: all
+Depends: dkms (>= 1.95), ${misc:Depends}
+Description: virtual dvb tuner driver in DKMS format.

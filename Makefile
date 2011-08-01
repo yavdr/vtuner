@@ -1,45 +1,42 @@
--include ../../Make.config
+DBG_LEVEL ?= 0x000f
+USE_SYSLOG ?= 1
+CFLAGS=-DHAVE_DVB_API_VERSION=5 -g -fPIC -O2 -DDBG_LEVEL=$(DBG_LEVEL) -DUSE_SYSLOG=$(USE_SYSLOG)
+LDFLAGS=-lpthread -lrt
+DRIVER=vtuner-dvb-3
+VERSION ?= 0.0.0
 
-all: i686 x86_64 mipsel ppc db2 sh4 mipsel15 ipkg vtunerc_driver
+all: vtunerd vtunerc driver/vtunerc/dkms.conf
 
-i686:
-	$(MAKE) -C build/i686 all
+vtunerd: vtunerd.c vtunerd-service.o vtuner-network.o vtuner-utils.o $(DRIVER).o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o vtunerd vtuner-network.o vtunerd-service.o $(DRIVER).o vtuner-utils.o vtunerd.c
+
+vtunerc: vtunerc.c vtuner-network.o vtuner-utils.o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o vtunerc vtuner-network.o vtuner-utils.o vtunerc.c
+
+vtunerd-service.o: vtunerd-service.c vtunerd-service.h
+	$(CC) $(CFLAGS) -c -o vtunerd-service.o vtunerd-service.c
 	
-x86_64:
-	$(MAKE) -C build/x86_64 all
+vtuner-network.o: vtuner-network.c vtuner-network.h
+	$(CC) $(CFLAGS) -c -o vtuner-network.o vtuner-network.c
 	
-ppc: 	
-	$(MAKE) -C build/ppc
-
-db2: 	
-	$(MAKE) -C build/db2
-
-mipsel: 	
-	$(MAKE) -C build/mipsel all
-
-mipsel15:         
-	$(MAKE) -C build/mipsel15
+vtuner-utils.o: vtuner-utils.c vtuner-utils.h
+	$(CC) $(CFLAGS) -c -o vtuner-utils.o vtuner-utils.c
 	
-sh4:         
-	$(MAKE) -C build/sh4
-
-ipkg:   mipsel
-	$(MAKE) -C pkgs ipkg
-    	
-arm:         
-	$(MAKE) -C build/arm
-
-vtunerc_driver:
-	$(MAKE) -C driver/vtunerc
-	
+vtuner-dvb-3.o: vtuner-dvb-3.c vtuner-dvb-3.h                                                               
+	$(CC) $(CFLAGS) -c -o vtuner-dvb-3.o vtuner-dvb-3.c                                                       
+                                                                                                                        
+driver/vtunerc/dkms.conf: driver/vtunerc/dkms.conf.in
+	sed -e 's/#VERSION#/${VERSION}/g' <driver/vtunerc/dkms.conf.in >driver/vtunerc/dkms.conf
+                                              
 clean:
-	$(MAKE) -C build/i686 clean
-	$(MAKE) -C build/x86_64 clean
-	$(MAKE) -C build/ppc clean
-	$(MAKE) -C build/db2 clean
-	$(MAKE) -C build/mipsel clean
-	$(MAKE) -C build/sh4 clean
-	$(MAKE) -C build/mipsel15 clean
-	$(MAKE) -C pkgs clean
-	$(MAKE) -C build/arm clean
-	$(MAKE) -C driver/vtunerc clean
+	rm -rf *.o *.so
+	rm -f vtunerd
+	rm -f vtunerc
+	rm -f driver/vtunerc/dkms.conf
+
+install:
+	install -m 755 -D vtunerd $(DESTDIR)/usr/bin/vtunerd
+	install -m 755 -D vtunerc $(DESTDIR)/usr/bin/vtunerc
+	install -d $(DESTDIR)/usr/src
+	cp -a driver/vtunerc $(DESTDIR)/usr/src/vtunerc-${VERSION}
+	rm -f $(DESTDIR)/usr/src/vtunerc-${VERSION}/dkms.conf.in

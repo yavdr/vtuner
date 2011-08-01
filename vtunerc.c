@@ -16,14 +16,24 @@
 
 #include "vtuner-network.h"
 
-int dbg_level =  0x00ff;
-int use_syslog = 1;
+#ifndef DBG_LEVEL
+#define DBG_LEVEL 0x00ff
+#endif
+
+#ifndef USE_SYSLOG
+#define USE_SYSLOG 1
+#endif
+
+int dbg_level =  DBG_LEVEL;
+int use_syslog = USE_SYSLOG;
 
 #define DEBUGMAIN(msg, ...)  write_message(0x0010, "[%d %s:%u] debug: " msg, getpid(), __FILE__, __LINE__, ## __VA_ARGS__)
 #define DEBUGMAINC(msg, ...) write_message(0x0010, msg, ## __VA_ARGS__)
 
 #define TS_PKT_LEN 188
 #define TS_HDR_SYNC 0x47
+
+#define MAX_DELAY 200
 
 typedef enum tsdata_worker_status {
   DST_UNKNOWN,
@@ -53,15 +63,20 @@ void *tsdata_worker(void *d) {
   unsigned char *readptr = buf;
   unsigned char *writeptr = buf;
   int bytesread = 0;
+  int bytesreadsum = 0;
+  int bytesreadsumcnt = 0;
   int bytes2read = sizeof(buf);
   int bytes2write = 0;
   int offset = 0;
+  int last_offset = -1;
   int offsetfound = 0;
   int tail = 0;
   size_t window_size = sizeof(buf);
   setsockopt(data->in, SOL_SOCKET, SO_RCVBUF, (char *) &window_size, sizeof(window_size));
 
   int delay=50; //ms to sleep after each write
+  int delay2long = MAX_DELAY;
+
 
   while(data->status == DST_RUNNING) {
     struct pollfd pfd[] = { { data->in, POLLIN, 0 } };
@@ -73,23 +88,13 @@ void *tsdata_worker(void *d) {
       bytes2read -= r;
       readptr += r;
 
-      if (bytesread < TS_PKT_LEN * 3) {
-        INFO("less than 3 TS packets read, read more.\n");
-        continue; 
-      }
+      unsigned char *ptr;
 
-      for (offset = 0, offsetfound = 0; offset < TS_PKT_LEN; offset++) {
-        unsigned char *ptr;
-
-        offsetfound = 1; 
-        for (ptr = buf; ptr < readptr; ptr += TS_PKT_LEN) {
-          if (*(ptr + offset) != TS_HDR_SYNC) {
-             offsetfound = 0;
-             break;
-          }
-        }
-        if (offsetfound)
+      for (offset = 0, offsetfound = 0; offset < sizeof(buf) - TS_PKT_LEN; offset++) {
+        if ((buf[offset] == TS_HDR_SYNC) && (buf[offset + TS_PKT_LEN] == TS_HDR_SYNC)) {
+          offsetfound = 1;
           break;
+        }
       }
 
       if (!offsetfound) {
@@ -107,13 +112,40 @@ void *tsdata_worker(void *d) {
       tail = (bytesread - offset) % TS_PKT_LEN;
       bytes2write = bytesread - offset - tail;
 
+      if (last_offset >= 0) {
+        if ((last_offset != offset) || (bytesread > rmax)) {
+          delay2long = delay;
+          delay -= (delay >> 1);
+          ERROR("buffer overrun, decreased delay: bytesread:%d rmax:%d, delay:%d\n", bytesread, rmax, delay);
+   
+        }
+        else if (delay2long - delay > 3) { 
+          delay += ((delay2long - delay) >> 1);
+          DEBUGMAIN("increased delay: bytesread:%d rmax:%d, delay:%d\n", bytesread, rmax, delay);
+        }
+      } 
+      last_offset = offset;
+
+      if (bytesreadsumcnt < 16) {
+        bytesreadsumcnt++;
+        bytesreadsum += bytesread;
+      } else {
+        bytesreadsum >>= 4;
+        if (bytesreadsum < rmax >> 1 && delay < MAX_DELAY) {
+          delay++;
+        }
+        DEBUGMAIN("bytesreadsum:%d rmax:%d, delay:%d\n", bytesreadsum, rmax, delay);
+        bytesreadsumcnt = bytesreadsum = 0;
+      }
+
+      DEBUGMAIN("bytesread:%d rmax:%d, delay:%d\n", bytesread, rmax, delay);
+#if 0
       // 2010-04-03 try to calculate optimal read delay.
       // read to often wastes CPU resources
       // reading to slow delays playback and makes
       // scaning impossible
       // the ideo is to adjust the delay to always receive 
       // packets in the range of 70% - 90% of rmax
-    
       if( bytesread > rmax && delay > 15) {
         delay -= 2;
         DEBUGMAIN("decreased delay: bytesread:%d rmax:%d, delay:%d\n", bytesread, rmax, delay);
@@ -121,7 +153,7 @@ void *tsdata_worker(void *d) {
         delay += 2;
         DEBUGMAIN("increased delay: bytesread:%d rmax:%d, delay:%d\n", bytesread, rmax, delay);
       } 
-
+#endif
       if (bytesread <= 0) {
         ERROR("tcp read - %m\n");
         data->status = DST_FAILED;
@@ -552,7 +584,7 @@ int main(int argc, char **argv) {
     poll(pfd, nrp, 100); // don't poll forever cause of status changes can happen
 
     if(pfd[0].revents & POLLPRI) {
-      INFO("vtuner message!\n");
+      DEBUGMAIN("vtuner message!\n");
       if (ioctl(vtuner_control, VTUNER_GET_MESSAGE, &msg.u.vtuner)) {
         ERROR("VTUNER_GET_MESSAGE- %m\n");
         exit(1);
@@ -587,7 +619,7 @@ int main(int argc, char **argv) {
           DEBUGMAIN("discover thread terminated.\n");
           dsd.status = DWS_IDLE;
         }
-        INFO("msg: %d completed\n", msg_type);
+        DEBUGMAIN("msg: %d completed\n", msg_type);
 
       } else {
         // fill the record array in the correct order
@@ -652,7 +684,7 @@ int main(int argc, char **argv) {
             exit(1);
           }
         }
-        INFO("msg: %d completed\n", msg_type);
+        DEBUGMAIN("msg: %d completed\n", msg_type);
       }
     }
          

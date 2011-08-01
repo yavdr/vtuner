@@ -8,8 +8,16 @@
 #include "vtunerd-service.h"
 #include "vtuner-utils.h"
 
-int dbg_level  = 0x00ff;
-int use_syslog = 1;
+#ifndef DBG_LEVEL
+#define DBG_LEVEL 0x00ff
+#endif
+
+#ifndef USE_SYSLOG
+#define USE_SYSLOG 1
+#endif
+
+int dbg_level  = DBG_LEVEL;
+int use_syslog = USE_SYSLOG;
 
 #define DEBUGMAIN(msg, ...)  write_message(0x0010, "[%d %s:%u] debug: " msg, getpid(), __FILE__, __LINE__, ## __VA_ARGS__)
 #define DEBUGMAINC(msg, ...) write_message(0x0010, msg, ## __VA_ARGS__)
@@ -86,6 +94,7 @@ int main(int argc, char **argv) {
 				  session[i].status = SST_BUSY;
 				  memcpy((void*)&session[i].client_so, (void*)&client_so, sizeof(client_so));
 				  pthread_create(&session[i].th, NULL, session_worker, (void*)&session[i]);
+                                  break;
 			}
 			else
 				INFO("No idle device found\n");
