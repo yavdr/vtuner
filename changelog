@@ -1,0 +1,372 @@
+r91
+fixed x86_64 issue, reported by Gerald.
+Thanks.
+
+r90
+fix for broken vtunerd because of r89
+
+r89
+refactor vtunerd, to prepare for plugin
+
+r88
+added x86_64 arch and enabled vtunerc generation there also. Note: still static build system, sorry
+Thanks for Gelald fix for 64bit arch on vdr-portal.de.
+
+r87 
+add Plugin for client config
+
+r86
+vtunerc only: swiched to opensource vtunerc.ko driver API for all but mipsel archs
+
+r85
+fixed package version and released new binaries
+
+r83
+Added compilation vtunerc for i686 arch
+
+r82
+Bugfix: fixed forgotten checkins which prevent vtunerd from being built
+
+r81
+vtunerc: first option tuple can be control device name
+(ie: ./vtunerc.mipsel -c /dev/vtunerc0)
+
+r80
+Added direct connect option. By expanding dvb-s/t/c command line option:
+	-<dvb-system-abbrev>[:<ip-address>[:<port>[:<group-mask>]]]
+Warning: group masking is not working yet!
+
+r73
+Added ARM target
+
+r72
+Code visibility change: caps binary values expanded to its symbolic values
+(or-ed together)
+
+r71
+Fixed a issue with DVB-C tuner capabilites, DVB-C should now work again.
+thanks to H2Deetoo, Ghost and Obi for identifying this.
+only the client is changed, compatible with servers from r70 on.
+
+r70
+fixed the following issue:
+http://www.i-have-a-dreambox.com/wbb2/thread.php?postid=1526470#post1526470
+Thanks to H2Deetoo for forwarding the fix.
+You have to update both, client and server.
+
+r69
+fixed issue with: error: DMX_START failed 
+reported by joergm6 on 10-Mar-2011
+only vtunerd.mipsel effected, compatible vith client from r67 on
+
+r68
+fixed client version numbering
+
+------------------------------------------------------------------------
+r67
+Added Support for FE_SET_PROPERTY
+- not compatible with older versions !
+- mipsel server is untested, will not work if image isn't recent
+
+------------------------------------------------------------------------
+r64
+- fix client failure if only one mode is given
+
+Known Issues:
+- vtuner is broken with newer images, because of new features
+  in the vtuner API not yet implemented. will be fixed 
+
+NOTE:  clients and server are compatible from version r58 on
+
+------------------------------------------------------------------------
+r63
+- OE1.6 build did not work with DM7025 (no OE1.6 available yet), added
+mipsel15 platform to overcome this
+
+NOTE:  clients and server are compatible from version r58 on
+------------------------------------------------------------------------
+r62
+created while adding tag for r61, no changes
+
+------------------------------------------------------------------------
+r61
+added support for up to three different frontend modes for the client
+mode can be switched while e2 is running ( tuner configuration, choose 
+vtuner and switch tuner type)
+
+modes can be given as parameter to vtunerc.mipsel, possible values
+are:
+-s2: register DVB-S2 frontend, but connect to any DVB-S or -S2 server
+-S2: register DVB-S2 frontend, connect to DVB-S2 server
+-s:  register DVB-S frontend, but connect to any DVB-S or -S2 server
+-S:  register DVB-S frontend, connect to DVB-S server
+-c:  register DVB-C frontend, connect to DVB-C server
+-t:  register DVB-T frontend, connect to DVB-T server
+
+You should edit /etc/vtunerc.conf after installation on your box:
+DAEMON="/usr/sbin/vtunerc.mipsel"
+OPTIONS="-s2 -c -t"
+
+NOTE: The old vtunercs, vtunercc or vtunerct calling convention is
+still supported, but this limits to client to one frontend.
+
+NOTE: the mipsel server can't distiguish between DVB-S2 and DVB-S, 
+you should not use -S2 if you want to connect to a mipsel box.
+------------------------------------------------------------------------
+r60
+switch to OE1.6
+remove plugin code from SVN
+
+------------------------------------------------------------------------
+r59, r58
+cleanup from a broken commit
+
+------------------------------------------------------------------------
+r57
+
+- change vtunerd to use non blocking IO
+- network packet size optimization
+
+------------------------------------------------------------------------
+r56
+
+cleanup the Makefile and related other
+
+------------------------------------------------------------------------
+r55
+
+fixed a bug in DVB-C/T tuning (see r52)
+minor changes to debug messages
+
+------------------------------------------------------------------------
+r54
+
+added sh4 target platform
+
+can't test this myself, pls. report both bug's and success
+
+------------------------------------------------------------------------
+r53
+
+removed dist/mipsel/vtuner-client_0.1-20100307-r1_mipsel.ipk
+
+------------------------------------------------------------------------
+r52
+
+bugfix for i686 platform
+DVB-C/T tuning was broken since I added S2API support
+reverted back to old style API for DVB-C/T
+
+------------------------------------------------------------------------
+r51
+
+improved debug messages
+
+------------------------------------------------------------------------
+r50
+
+minor fixup to set unused bytes to zero in DISEQC message
+
+------------------------------------------------------------------------
+r49 | rmie | 2010-03-15 22:34:19 +0100 (Mon, 15 Mar 2010) | 4 lines
+
+improved ipkg build script as suggested by Sat_Man, using ar instead of tar                                                                                                                                                                                                    
+likely to solve problems with OE1.6 as well              
+
+
+------------------------------------------------------------------------
+r48
+
+minor change to vtunerc. added hardware dentification to
+set hw specific options. not used yet, as no good parameters for dm500hd 
+are known.
+
+------------------------------------------------------------------------
+r47
+
+implemented DISEQC for ppc platform (E1 Boxes), yet untested
+
+------------------------------------------------------------------------
+r46 
+
+H/V switch didn't work on E1 server boxes
+This has been fixed in vtuner-dmm-2.c
+
+------------------------------------------------------------------------
+r45 
+
+added changelog to make it easier to track changes for users not using SVN
+
+------------------------------------------------------------------------
+r44 | rmie | 2010-03-07 14:30:41 +0100 (Sun, 07 Mar 2010) | 3 lines
+
+thanks to m0rphU for the tip, how to define several deps in ipkg configfile
+
+
+------------------------------------------------------------------------
+r43 | rmie | 2010-03-07 14:20:45 +0100 (Sun, 07 Mar 2010) | 4 lines
+
+changes to several make related files to support shared libraries to be 
+loaded by enigma2. this is a preparation for a enigma2 plugin
+
+
+------------------------------------------------------------------------
+r42 | rmie | 2010-03-07 14:16:56 +0100 (Sun, 07 Mar 2010) | 2 lines
+
+forgot to commit removal of dist/mipsel/vtuner-client_0.1-20100225-r1_mipsel.ipk 
+
+------------------------------------------------------------------------
+r41 | rmie | 2010-03-07 14:14:41 +0100 (Sun, 07 Mar 2010) | 3 lines
+
+fix dependencies in ipkg config file to allow installation
+on all platforms
+
+------------------------------------------------------------------------
+r40 | rmie | 2010-02-25 10:53:21 +0100 (Thu, 25 Feb 2010) | 3 lines
+
+update of all binaries 
+
+
+------------------------------------------------------------------------
+r39 | rmie | 2010-02-25 10:51:45 +0100 (Thu, 25 Feb 2010) | 3 lines
+
+blocking while reading data can delay data to be sent.
+
+
+------------------------------------------------------------------------
+r38 | rmie | 2010-02-25 10:49:57 +0100 (Thu, 25 Feb 2010) | 6 lines
+
+some changes that should help to increase amount of data
+transfered with each read/write call.
+reducing the amount of calls to read/write, for all
+vtuner, dvb and network, seems to reduce CPU usage as
+well
+
+------------------------------------------------------------------------
+r37 | rmie | 2010-02-25 10:45:07 +0100 (Thu, 25 Feb 2010) | 4 lines
+
+dded some debug code, yet unknown issue left that makes
+dm600 and dm500 unusable
+
+
+------------------------------------------------------------------------
+r36 | rmie | 2010-02-25 10:41:57 +0100 (Thu, 25 Feb 2010) | 4 lines
+
+switch to new release tag (20100225)
+keep .svn dirs out ouf ipkg
+
+
+------------------------------------------------------------------------
+r35 | rmie | 2010-02-25 10:37:18 +0100 (Thu, 25 Feb 2010) | 3 lines
+
+remove unused code
+
+
+------------------------------------------------------------------------
+r34 | rmie | 2009-12-13 12:05:28 +0100 (Sun, 13 Dec 2009) | 2 lines
+
+bug fix for vtunerd, fd to read TS data from got closed sometimes
+
+------------------------------------------------------------------------
+r33 | rmie | 2009-12-05 17:01:57 +0100 (Sat, 05 Dec 2009) | 2 lines
+
+improved S2API tuning support
+
+------------------------------------------------------------------------
+r32 | rmie | 2009-11-29 16:50:19 +0100 (Sun, 29 Nov 2009) | 1 line
+
+
+------------------------------------------------------------------------
+r31 | rmie | 2009-10-10 00:06:58 +0200 (Sat, 10 Oct 2009) | 4 lines
+
+- fixes for build env.
+- vtunerc.c patch from H2Deetoo, to prevent pixelation
+
+
+------------------------------------------------------------------------
+r30 | rmie | 2009-10-09 23:48:07 +0200 (Fri, 09 Oct 2009) | 2 lines
+
+vtuner client ipkg
+
+------------------------------------------------------------------------
+r29 | rmie | 2009-10-09 23:43:35 +0200 (Fri, 09 Oct 2009) | 2 lines
+
+test
+
+------------------------------------------------------------------------
+r28 | rmie | 2009-10-09 23:41:32 +0200 (Fri, 09 Oct 2009) | 2 lines
+
+test
+
+------------------------------------------------------------------------
+r27 | rmie | 2009-09-21 23:47:47 +0200 (Mon, 21 Sep 2009) | 2 lines
+
+new build system
+
+------------------------------------------------------------------------
+r26 | rmie | 2009-09-21 23:47:08 +0200 (Mon, 21 Sep 2009) | 2 lines
+
+new build system
+
+------------------------------------------------------------------------
+r25 | rmie | 2009-09-21 00:09:03 +0200 (Mon, 21 Sep 2009) | 58 lines
+
+cleanup direcotry structure
+
+--This line, and those below, will be ignered--
+
+D    trunk/vtunerd.mipsel
+D    trunk/vtunerd.i686
+A    trunk/tools
+A    trunk/tools/vtunerc-test.c
+A    trunk/tools/get_fe_info.c
+A    trunk/tools/udp-bomber.c
+A    trunk/vtuner-utils.c
+A    trunk/dist
+A    trunk/dist/ppc
+AM   trunk/dist/ppc/vtunerd.ppc
+A    trunk/dist/db2
+AM   trunk/dist/db2/vtunerd.db2
+A    trunk/dist/mipsel
+A  + trunk/dist/mipsel/vtunerd.mipsel
+AM   trunk/dist/mipsel/libvtuner-mipsel.so
+A  + trunk/dist/mipsel/vtunerc.mipsel
+AM   trunk/dist/mipsel/vtuner-client_0.1-20090914-r1_mipsel.ipk
+A    trunk/dist/i686
+A  + trunk/dist/i686/vtunerd.i686
+A    trunk/pkgs
+A    trunk/pkgs/vtuner-client
+A    trunk/pkgs/vtuner-client/CONTROL
+A    trunk/pkgs/vtuner-client/CONTROL/control
+A    trunk/pkgs/vtuner-client/CONTROL/conffiles
+A    trunk/pkgs/vtuner-client/usr
+A    trunk/pkgs/vtuner-client/usr/sbin
+AM   trunk/pkgs/vtuner-client/usr/sbin/vtunercs
+AM   trunk/pkgs/vtuner-client/usr/sbin/vtunercc
+AM   trunk/pkgs/vtuner-client/usr/sbin/vtunerct
+AM   trunk/pkgs/vtuner-client/usr/sbin/vtunerc.mipsel
+A    trunk/pkgs/vtuner-client/etc
+A    trunk/pkgs/vtuner-client/etc/init.d
+AM   trunk/pkgs/vtuner-client/etc/init.d/vtunerc
+A    trunk/pkgs/vtuner-client/etc/rc0.d
+AM   trunk/pkgs/vtuner-client/etc/rc0.d/K10vtunerc
+A    trunk/pkgs/vtuner-client/etc/rc1.d
+AM   trunk/pkgs/vtuner-client/etc/rc1.d/K10vtunerc
+A    trunk/pkgs/vtuner-client/etc/rc2.d
+AM   trunk/pkgs/vtuner-client/etc/rc2.d/S90vtunerc
+A    trunk/pkgs/vtuner-client/etc/rc3.d
+AM   trunk/pkgs/vtuner-client/etc/rc3.d/S90vtunerc
+A    trunk/pkgs/vtuner-client/etc/rc4.d
+AM   trunk/pkgs/vtuner-client/etc/rc4.d/S90vtunerc
+A    trunk/pkgs/vtuner-client/etc/vtunerc.conf
+A    trunk/pkgs/vtuner-client/etc/rc5.d
+AM   trunk/pkgs/vtuner-client/etc/rc5.d/S90vtunerc
+A    trunk/pkgs/vtuner-client/etc/rc6.d
+AM   trunk/pkgs/vtuner-client/etc/rc6.d/K10vtunerc
+AM   trunk/pkgs/ipkg-build
+A    trunk/vtunerd-service.c
+A    trunk/vtuner-utils.h
+A    trunk/vtunerd-service.h
+D    trunk/vtunerc.mipsel
+
+------------------------------------------------------------------------

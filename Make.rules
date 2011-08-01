@@ -1,0 +1,19 @@
+../../dist/$(ARCH)/vtunerd.$(ARCH): ../../vtunerd.c vtunerd-service.o vtuner-network.o vtuner-utils.o $(DRIVER).o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o ../../dist/$(ARCH)/vtunerd.$(ARCH) vtuner-network.o vtunerd-service.o $(DRIVER).o vtuner-utils.o ../../vtunerd.c
+
+../../dist/$(ARCH)/vtunerc.$(ARCH): ../../vtunerc.c vtuner-network.o vtuner-utils.o
+	$(CC) $(CFLAGS) $(LDFLAGS) -o ../../dist/$(ARCH)/vtunerc.$(ARCH) vtuner-network.o vtuner-utils.o ../../vtunerc.c
+	
+vtunerd-service.o: ../../vtunerd-service.c ../../vtunerd-service.h
+	$(CC) $(CFLAGS) -c -o vtunerd-service.o ../../vtunerd-service.c
+	
+vtuner-network.o: ../../vtuner-network.c ../../vtuner-network.h
+	$(CC) $(CFLAGS) -c -o vtuner-network.o ../../vtuner-network.c
+	
+vtuner-utils.o: ../../vtuner-utils.c ../../vtuner-utils.h
+	$(CC) $(CFLAGS) -c -o vtuner-utils.o ../../vtuner-utils.c
+	
+clean:
+	rm -rf *.o *.so
+	rm -f ../../dist/$(ARCH)/vtunerd.$(ARCH)
+	rm -f ../../dist/$(ARCH)/vtunerc.$(ARCH)

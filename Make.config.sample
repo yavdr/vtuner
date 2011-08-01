@@ -1,0 +1,30 @@
+# define the CC for target i686
+CC-i686=gcc
+INCLUDE-i686=
+
+# define the CC for target x86_64
+CC-x86_64=gcc
+INCLUDE-x86_64=
+
+# define the CC for target ppc
+CC-ppc=/stuff/dm600pvr/build/tmp/cross/bin/powerpc-linux-gcc
+# extra include path for ppc DVB headers
+INCLUDE-ppc=-I/stuff/dm600pvr/build/tmp/work/dreambox-dvbincludes-1-r0/include 
+
+# define the CC for target mipsel
+CC-mipsel=/stuff-1.6/dm500hd/build/tmp/cross/mipsel/bin/mipsel-oe-linux-gcc
+CXX-mipsel=/stuff-1.6/dm500hd/build/tmp/cross/mipsel/bin/mipsel-oe-linux-g++
+
+CC-mipsel15=/stuff/dm800/build/tmp/cross/bin/mipsel-linux-gcc
+CXX-mipsel15=/stuff/dm800/build/tmp/cross/bin/mipsel-linux-g++
+
+# define the CC for target db2
+CC-db2=/stuff/dm600pvr/build/tmp/cross/bin/powerpc-linux-gcc
+
+# define the CC for target sh4
+CC-sh4=/opt/STM/STLinux-2.3/devkit/sh4/bin/sh4-linux-gcc
+
+# define the CC for target arm
+CC-arm=arm-none-linux-gnueabi-gcc
+STRIP-arm=arm-none-linux-gnueabi-strip
+INCLUDE-arm=-I/home/hop/nessie/2.6.22/include
