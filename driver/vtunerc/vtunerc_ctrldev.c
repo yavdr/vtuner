@@ -48,25 +48,36 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff,
 	}
 
 	len -= tailsize;
-	kernel_buf = kmalloc(len, GFP_KERNEL);
-
-	if (kernel_buf == NULL)
-		return -ENOMEM;
-
+        
 	if (down_interruptible(&ctx->tswrite_sem))
 		return -ERESTARTSYS;
 
-	if (copy_from_user(kernel_buf, buff, len)) {
-		printk(KERN_ERR "vtunerc%d: userdata passing error\n",
-				ctx->idx);
-		up(&ctx->tswrite_sem);
-		return -EINVAL;
+        if ((ctx->vmalloc_area != NULL) && (vmalloc_area_len >= len))
+        {
+	  kernel_buf = (char *)ctx->vmalloc_area;
+        }
+        else
+        {
+	  kernel_buf = kmalloc(len, GFP_KERNEL);
+
+	  if (kernel_buf == NULL)
+		  return -ENOMEM;
+
+	  if (down_interruptible(&ctx->tswrite_sem))
+		  return -ERESTARTSYS;
+
+	  if (copy_from_user(kernel_buf, buff, len)) {
+		  printk(KERN_ERR "vtunerc%d: userdata passing error\n",
+			  ctx->idx);
+		  up(&ctx->tswrite_sem);
+		  return -EINVAL;
+          }
 	}
 
 	if (ctx->config->tscheck) {
 		int i;
 
-		for (i = 0; i < len; i += 188)
+	  	for (i = 0; i < len; i += 188)
 			if (kernel_buf[i] != 0x47) { /* start of TS packet */
 				printk(KERN_ERR "vtunerc%d: Data not start on packet boundary: index=%d data=%02x %02x %02x %02x %02x ...\n",
 						ctx->idx, i / 188, kernel_buf[i], kernel_buf[i + 1],
@@ -85,7 +96,8 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff,
 	/* TODO:  analyze injected data for statistics */
 #endif
 
-	kfree(kernel_buf);
+        if ((ctx->vmalloc_area == NULL) || (vmalloc_area_len < len))
+	  kfree(kernel_buf);
 
 	return len;
 }
@@ -121,6 +133,42 @@ static int vtunerc_ctrldev_open(struct inode *inode, struct file *filp)
 	return 0;
 }
 
+static int vtunerc_ctrldev_mmap(struct file *filp, struct vm_area_struct *vma)
+{
+	struct vtunerc_ctx *ctx = filp->private_data;
+        int ret;
+        long length = vma->vm_end - vma->vm_start;
+        unsigned long start = vma->vm_start;
+        char *vmalloc_area_ptr = (char *)ctx->vmalloc_area;
+        unsigned long pfn;
+
+        /* allocate a memory area with vmalloc. */
+        if ((ctx->vmalloc_area = (int *)vmalloc(length)) == NULL) {
+                return -ENOMEM;
+        }
+
+        /* mark the pages reserved */
+        for (i = 0; i < length; i+= PAGE_SIZE) {
+                SetPageReserved(vmalloc_to_page((void *)(((unsigned long)ctx->vmalloc_area) + i)));
+        }
+
+        /* loop over all pages, map it page individually */
+        while (length > 0) {
+                pfn = vmalloc_to_pfn(vmalloc_area_ptr);
+                if ((ret = remap_pfn_range(vma, start, pfn, PAGE_SIZE,
+                                           PAGE_SHARED)) < 0) {
+                        return ret;
+                }
+                start += PAGE_SIZE;
+                vmalloc_area_ptr += PAGE_SIZE;
+                length -= PAGE_SIZE;
+        }
+
+        ctx->vmalloc_area_len = length;
+
+	return 0;
+}
+
 static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 {
 	struct vtunerc_ctx *ctx = filp->private_data;
@@ -143,6 +191,19 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 	memset(&fakemsg, 0, sizeof(fakemsg));
 	vtunerc_ctrldev_xchange_message(ctx, &fakemsg, 0);
 	up(&ctx->xchange_sem);
+
+        if (vma)
+        {
+          /* unreserve the pages */
+          for (i = 0; i < ctx->vmalloc_area_len; i+= PAGE_SIZE) {
+                  SetPageReserved(vmalloc_to_page((void *)(((unsigned long)ctx->vmalloc_area) + i)));
+          }
+          if (ctx->vmalloc_area)
+          {
+            /* free the memory areas */
+            vfree(ctx->vmalloc_area);
+          }
+        }
 
 	return 0;
 }
@@ -311,7 +372,8 @@ static const struct file_operations vtunerc_ctrldev_fops = {
 	.read  = vtunerc_ctrldev_read,
 	.poll  = (void *) vtunerc_ctrldev_poll,
 	.open  = vtunerc_ctrldev_open,
-	.release  = vtunerc_ctrldev_close
+	.release  = vtunerc_ctrldev_close,
+        .mmap = vtunerc_ctrldev_mmap
 };
 
 static struct class *pclass;

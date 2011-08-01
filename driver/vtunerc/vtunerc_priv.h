@@ -90,6 +90,12 @@ struct vtunerc_ctx {
 	unsigned int stat_rd_data;
 	unsigned int stat_ctrl_sess;
 	unsigned short pidstat[MAX_PIDTAB_LEN];
+
+        /* mmap buffer */
+        struct vm_area_struct *vma;
+        /* pointer to the vmalloc'd area - alway page aligned */
+        int *vmalloc_area;
+        int vmalloc_area_len;
 };
 
 int vtunerc_register_ctrldev(struct vtunerc_ctx *ctx);
