@@ -11,7 +11,7 @@ vtunerd: vtunerd.c vtunerd-service.o vtuner-network.o vtuner-utils.o $(DRIVER).o
 	$(CC) $(CFLAGS) $(LDFLAGS) -o vtunerd vtuner-network.o vtunerd-service.o $(DRIVER).o vtuner-utils.o vtunerd.c
 
 vtunerc: vtunerc.c vtuner-network.o vtuner-utils.o
-	$(CC) $(CFLAGS) $(LDFLAGS) -o vtunerc vtuner-network.o vtuner-utils.o vtunerc.c
+	$(CC) $(CFLAGS) -o vtunerc vtuner-network.o vtuner-utils.o vtunerc.c $(LDFLAGS)
 
 vtunerd-service.o: vtunerd-service.c vtunerd-service.h
 	$(CC) $(CFLAGS) -c -o vtunerd-service.o vtunerd-service.c
