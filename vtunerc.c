@@ -80,11 +80,12 @@ void *tsdata_worker(void *d) {
   int delay=50; //ms to sleep after each write
   int delay2long = MAX_DELAY;
 
-  if ((bufptr = mmap(0, bufsiz, PROT_READ, MAP_SHARED, data->out, 0)) == MAP_FAILED)
+  if ((bufptr = mmap(0, bufsiz, PROT_READ | PROT_WRITE, MAP_SHARED, data->out, 0)) == MAP_FAILED)
   {
     ERROR("Memory mapping failed, using normal buffering: %m.\n");
     bufptr = buf;
   }
+
   readptr = writeptr = bufptr;
  
   while(data->status == DST_RUNNING) {

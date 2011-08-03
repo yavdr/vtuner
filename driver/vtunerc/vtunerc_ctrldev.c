@@ -165,9 +165,6 @@ static int vtunerc_ctrldev_mmap(struct file *filp, struct vm_area_struct *vma)
         ctx->buffer_len = length;
         ctx->vm_start = vma->vm_start;
 
-        for (length = 0; length < 256; length++)
-          *(ctx->buffer_ptr + length) = (unsigned char)length;
-
 	return 0;
 }
 

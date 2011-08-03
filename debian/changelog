@@ -1,3 +1,9 @@
+vtuner (20110803200843unstable-0yavdr0~natty) natty; urgency=low
+
+  * added memory mapping
+
+ -- Gerald Dachs <gda@dachsweb.de>  Wed, 03 Aug 2011 20:08:43 +0200
+
 vtuner (0+hg20110718-0yavdr0~natty) natty; urgency=low
 
   *  renamed to vtuner
