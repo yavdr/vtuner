@@ -52,19 +52,17 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff,
 	if (down_interruptible(&ctx->tswrite_sem))
 		return -ERESTARTSYS;
 
-        if ((ctx->vmalloc_area != NULL) && (ctx->vmalloc_area_len >= len))
+        if ((ctx->buffer_ptr != NULL) && (ctx->buffer_len >= len))
         {
-	  kernel_buf = (char *)ctx->vmalloc_area;
+	  kernel_buf = ctx->buffer_ptr + (unsigned long)(buff - ctx->vm_start);
         }
         else
         {
+//	  printk(KERN_ERR "vtunerc%d: no mmap\n", ctx->idx);
 	  kernel_buf = kmalloc(len, GFP_KERNEL);
 
 	  if (kernel_buf == NULL)
 		  return -ENOMEM;
-
-	  if (down_interruptible(&ctx->tswrite_sem))
-		  return -ERESTARTSYS;
 
 	  if (copy_from_user(kernel_buf, buff, len)) {
 		  printk(KERN_ERR "vtunerc%d: userdata passing error\n",
@@ -96,7 +94,7 @@ static ssize_t vtunerc_ctrldev_write(struct file *filp, const char *buff,
 	/* TODO:  analyze injected data for statistics */
 #endif
 
-        if ((ctx->vmalloc_area == NULL) || (ctx->vmalloc_area_len < len))
+        if (ctx->buffer_ptr == NULL)
 	  kfree(kernel_buf);
 
 	return len;
@@ -130,6 +128,9 @@ static int vtunerc_ctrldev_open(struct inode *inode, struct file *filp)
 	ctx->fd_opened++;
 	ctx->closing = 0;
 
+        ctx->buffer_ptr = NULL;
+	ctx->buffer_len = 0;
+
 	return 0;
 }
 
@@ -138,34 +139,34 @@ static int vtunerc_ctrldev_mmap(struct file *filp, struct vm_area_struct *vma)
 	struct vtunerc_ctx *ctx = filp->private_data;
         int ret;
         long length = vma->vm_end - vma->vm_start;
-        unsigned long start = vma->vm_start;
-        char *vmalloc_area_ptr = (char *)ctx->vmalloc_area;
-        unsigned long pfn;
 	int i;
 
-        /* allocate a memory area with vmalloc. */
-        if ((ctx->vmalloc_area = (int *)vmalloc(length)) == NULL) {
+        /* allocate a memory area with kmalloc. */
+        if ((ctx->buffer_ptr = kmalloc(length, GFP_KERNEL)) == NULL) {
+		printk(KERN_ERR "vtunerc%d: no memory\n", ctx->idx);
                 return -ENOMEM;
         }
 
+
         /* mark the pages reserved */
         for (i = 0; i < length; i+= PAGE_SIZE) {
-                SetPageReserved(vmalloc_to_page((void *)(((unsigned long)ctx->vmalloc_area) + i)));
+		SetPageReserved(virt_to_page(((unsigned long)ctx->buffer_ptr) + i));
         }
 
-        /* loop over all pages, map it page individually */
-        while (length > 0) {
-                pfn = vmalloc_to_pfn(vmalloc_area_ptr);
-                if ((ret = remap_pfn_range(vma, start, pfn, PAGE_SIZE,
-                                           PAGE_SHARED)) < 0) {
-                        return ret;
-                }
-                start += PAGE_SIZE;
-                vmalloc_area_ptr += PAGE_SIZE;
-                length -= PAGE_SIZE;
+        /* map the whole physically contiguous area in one piece */
+        if ((ret = remap_pfn_range(vma,
+                                   vma->vm_start,
+                                   virt_to_phys((void *)ctx->buffer_ptr) >> PAGE_SHIFT,
+                                   length,
+                                   vma->vm_page_prot)) < 0) {
+                return ret;
         }
 
-        ctx->vmalloc_area_len = length;
+        ctx->buffer_len = length;
+        ctx->vm_start = vma->vm_start;
+
+        for (length = 0; length < 256; length++)
+          *(ctx->buffer_ptr + length) = (unsigned char)length;
 
 	return 0;
 }
@@ -194,15 +195,15 @@ static int vtunerc_ctrldev_close(struct inode *inode, struct file *filp)
 	vtunerc_ctrldev_xchange_message(ctx, &fakemsg, 0);
 	up(&ctx->xchange_sem);
 
-        if (ctx->vmalloc_area)
-        {
-          /* unreserve the pages */
-          for (i = 0; i < ctx->vmalloc_area_len; i+= PAGE_SIZE) {
-                  SetPageReserved(vmalloc_to_page((void *)(((unsigned long)ctx->vmalloc_area) + i)));
-          }
-          /* free the memory areas */
-          vfree(ctx->vmalloc_area);
-        }
+	if (ctx->buffer_ptr)
+	{
+		/* unreserve the pages */
+		for (i = 0; i < ctx->buffer_len; i+= PAGE_SIZE) {
+			SetPageReserved(virt_to_page(((unsigned long)ctx->buffer_ptr) + i));
+		}
+		/* free the memory areas */
+		kfree(ctx->buffer_ptr);
+	}
 
 	return 0;
 }

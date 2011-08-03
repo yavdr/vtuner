@@ -93,9 +93,10 @@ struct vtunerc_ctx {
 
         /* mmap buffer */
         struct vm_area_struct *vma;
-        /* pointer to the vmalloc'd area - alway page aligned */
-        int *vmalloc_area;
-        int vmalloc_area_len;
+        /* pointer to the kmalloc'd area - alway page aligned */
+        char *buffer_ptr;
+        int buffer_len;
+	unsigned long vm_start;
 };
 
 int vtunerc_register_ctrldev(struct vtunerc_ctx *ctx);
