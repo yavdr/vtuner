@@ -8,7 +8,7 @@ VERSION ?= 0.0.0
 all: vtunerd vtunerc driver/vtunerc/dkms.conf
 
 vtunerd: vtunerd.c vtunerd-service.o vtuner-network.o vtuner-utils.o $(DRIVER).o
-	$(CC) $(CFLAGS) $(LDFLAGS) -o vtunerd vtuner-network.o vtunerd-service.o $(DRIVER).o vtuner-utils.o vtunerd.c
+	$(CC) $(CFLAGS) -o vtunerd vtuner-network.o vtunerd-service.o $(DRIVER).o vtuner-utils.o vtunerd.c $(LDFLAGS) 
 
 vtunerc: vtunerc.c vtuner-network.o vtuner-utils.o
 	$(CC) $(CFLAGS) -o vtunerc vtuner-network.o vtuner-utils.o vtunerc.c $(LDFLAGS)
