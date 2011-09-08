@@ -14,6 +14,7 @@
 #include <signal.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "vtuner-network.h"
 
@@ -36,6 +37,12 @@ int use_syslog = USE_SYSLOG;
 
 #define MAX_DELAY 200
 
+typedef enum application_status {
+  APP_RUNNING,
+  APP_EXITING,
+  APP_FAILED
+} application_status_t;
+
 typedef enum tsdata_worker_status {
   DST_UNKNOWN,
   DST_RUNNING,
@@ -49,143 +56,66 @@ typedef struct tsdata_worker_data {
   tsdata_worker_status_t status;  
 } tsdata_worker_data_t;
 
+application_status_t app_status;
+
+void termination_handler(int signum) {
+  app_status = APP_EXITING;
+}
+
 void *tsdata_worker(void *d) {
   tsdata_worker_data_t* data = (tsdata_worker_data_t*)d;
 
   data->status = DST_RUNNING;
 
-  // 2010-01-30
-  // net.ipv4.tcp_wmem max is typically 131072, choosen a value
-  // below that is a multiple of TS packet size
-  // need to have a buffer greater than this to detect if we're
-  // receiving to slow
-  int rmax=696*TS_PKT_LEN;
-  int bufsiz = (696+100)*TS_PKT_LEN;
-  unsigned char buf[bufsiz];
+  const int bufsiz = 697 * TS_PKT_LEN;
   unsigned char *bufptr;
-  unsigned char *readptr;
-  unsigned char *writeptr;
-  int bytesread = 0;
-  int bytesreadsum = 0;
-  int bytesreadsumcnt = 0;
-  int bytes2read = sizeof(buf);
-  int bytes2write = 0;
-  int offset = 0;
-  int last_offset = -1;
-  int offsetfound = 0;
-  int tail = 0;
-  size_t window_size = sizeof(buf);
-  setsockopt(data->in, SOL_SOCKET, SO_RCVBUF, (char *) &window_size, sizeof(window_size));
+  int nommap = 0;
+  
+  FILE *fin = NULL;
+  int len;
 
-  int delay=50; //ms to sleep after each write
-  int delay2long = MAX_DELAY;
+#if 0
+  struct sigaction sa = { .sa_handler = alarm_handler, .sa_flags = 0 };
+  sigaction(SIGALRM, &sa, 0);
+#endif
 
   if ((bufptr = mmap(0, bufsiz, PROT_READ | PROT_WRITE, MAP_SHARED, data->out, 0)) == MAP_FAILED)
   {
     ERROR("Memory mapping failed, using normal buffering: %m.\n");
-    bufptr = buf;
+    if ((bufptr = (char *)malloc(bufsiz)) == NULL) {
+      ERROR("malloc failed - %m\n");                                                                               
+      data->status = DST_FAILED;
+    } else {
+      nommap = 1;
+    }
+  }
+#if 0
+  alarm(1);
+#endif
+  if ((fin = fdopen(data->in, "r")) == NULL) {
+    ERROR("fdopen failed - %m\n");
+    data->status = DST_FAILED;
+  } else {
+    while((data->status == DST_RUNNING) && !feof(fin)) {
+      if ((len = fread(bufptr, bufsiz, 1, fin)) > 0) {
+          if ((len = write(data->out, bufptr, bufsiz)) != bufsiz) {
+            ERROR("write failed - %m\n");
+            data->status = DST_FAILED;
+          }
+      } else if (len != EINTR) {
+        ERROR("read failed - %m\n");
+        data->status = DST_FAILED;
+      }
+    } 
   }
 
-  readptr = writeptr = bufptr;
- 
-  while(data->status == DST_RUNNING) {
-    struct pollfd pfd[] = { { data->in, POLLIN, 0 } };
-    // don't poll forever to catch data->status != DST_RUNNING
-    if( poll(pfd, 1, 500) != 0) {
-      // we're polling one fd here so we know that reading can't block
-      int r = read(data->in, readptr, bytes2read);
-      bytesread += r;
-      bytes2read -= r;
-      readptr += r;
-
-      unsigned char *ptr;
-
-      for (offset = 0, offsetfound = 0; offset < bufsiz - TS_PKT_LEN; offset++) {
-        if ((bufptr[offset] == TS_HDR_SYNC) && (bufptr[offset + TS_PKT_LEN] == TS_HDR_SYNC)) {
-          offsetfound = 1;
-          break;
-        }
-      }
-
-      if (!offsetfound) {
-        ERROR("start of TS packet not found, throwing buffer away.\n");
-        readptr = bufptr;
-        bytesread = 0;
-        bytes2read = bufsiz;
-        tail = 0;
-        continue;
-      } 
-
-      if (offset)
-        DEBUGMAIN("offset to TS packet %d bytes.\n", offset);
-      writeptr = bufptr + offset;
-      tail = (bytesread - offset) % TS_PKT_LEN;
-      bytes2write = bytesread - offset - tail;
-
-      if (last_offset >= 0) {
-        if ((last_offset != offset) || (bytesread > rmax)) {
-          delay2long = delay;
-          delay -= (delay >> 1);
-          ERROR("buffer overrun, decreased delay: bytesread:%d rmax:%d, delay:%d\n", bytesread, rmax, delay);
-   
-        }
-        else if (delay2long - delay > 3) { 
-          delay += ((delay2long - delay) >> 1);
-          DEBUGMAIN("increased delay: bytesread:%d rmax:%d, delay:%d\n", bytesread, rmax, delay);
-        }
-      } 
-      last_offset = offset;
-
-      if (bytesreadsumcnt < 16) {
-        bytesreadsumcnt++;
-        bytesreadsum += bytesread;
-      } else {
-        bytesreadsum >>= 4;
-        if (bytesreadsum < rmax >> 1 && delay < MAX_DELAY) {
-          delay++;
-        }
-        DEBUGMAIN("bytesreadsum:%d rmax:%d, delay:%d\n", bytesreadsum, rmax, delay);
-        bytesreadsumcnt = bytesreadsum = 0;
-      }
-
-      DEBUGMAIN("bytesread:%d rmax:%d, delay:%d\n", bytesread, rmax, delay);
 #if 0
-      // 2010-04-03 try to calculate optimal read delay.
-      // read to often wastes CPU resources
-      // reading to slow delays playback and makes
-      // scaning impossible
-      // the ideo is to adjust the delay to always receive 
-      // packets in the range of 70% - 90% of rmax
-      if( bytesread > rmax && delay > 15) {
-        delay -= 2;
-        DEBUGMAIN("decreased delay: bytesread:%d rmax:%d, delay:%d\n", bytesread, rmax, delay);
-      } else if( bytesread < 0.70*rmax && delay < 95) {
-        delay += 2;
-        DEBUGMAIN("increased delay: bytesread:%d rmax:%d, delay:%d\n", bytesread, rmax, delay);
-      } 
+  sa.sa_handler = SIG_IGN;
+  sigaction(SIGALRM, &sa, 0);
 #endif
-      if (bytesread <= 0) {
-        ERROR("tcp read - %m\n");
-        data->status = DST_FAILED;
-      } else {
-        if (write(data->out, writeptr, bytes2write) != bytes2write) {
-          ERROR("write failed - %m\n");
-          data->status = DST_FAILED;
-        } else {
-          // DEBUGMAIN("receive buffer stats. size:%d, rmax:%d, delay:%d\n", bytes2write, rmax, delay); 
-          // suggested from H2Deetoo to prevent pixelation with
-          // crypted HD DVB-C channels
-          // 2010-01-30
-          // wait 100 ms instead of 10 to allow a large chunk of 
-          // data to be received in between 
-          usleep(delay*1000);
-        }
-        memmove(bufptr, readptr - tail, tail);
-        readptr = bufptr + tail;
-        bytesread = tail;
-        bytes2read = bufsiz - tail;
-      }
-    }
+
+  if (nommap && bufptr) {
+    free(bufptr);
   }
 
   ERROR("TS data copy thread terminated.\n");
@@ -356,6 +286,25 @@ int main(int argc, char **argv) {
   int vtuner_control;
   struct stat st;
   char *ctrl_devname = VTUNER_CTRL_DEVNAME;
+  struct sigaction new_action, old_action;
+     
+
+  app_status = APP_RUNNING;
+
+  /* Set up the structure to specify the new action. */
+  new_action.sa_handler = termination_handler;
+  sigemptyset (&new_action.sa_mask);
+  new_action.sa_flags = 0;
+     
+  sigaction (SIGINT, NULL, &old_action);
+  if (old_action.sa_handler != SIG_IGN)
+    sigaction (SIGINT, &new_action, NULL);
+  sigaction (SIGHUP, NULL, &old_action);
+  if (old_action.sa_handler != SIG_IGN)
+    sigaction (SIGHUP, &new_action, NULL);
+  sigaction (SIGTERM, NULL, &old_action);
+  if (old_action.sa_handler != SIG_IGN)
+    sigaction (SIGTERM, &new_action, NULL);
 
   // first option tuple can be control device name (ie: -d /dev/vtunerc0)
   if(argc > 2 && !strcmp(argv[1],"-d")) {
@@ -482,14 +431,15 @@ int main(int argc, char **argv) {
   long values_received = 0;
   vtuner_update_t values;
   int vfd;
+  pthread_t dwt, dst;
+  tsdata_worker_data_t dwd;
 
   #define RECORDLEN 5
   vtuner_net_message_t record[RECORDLEN]; // SET_TONE, SET_VOLTAGE, SEND_DISEQC_MSG, MSG_PIDLIST
+
   memset(&record, 0, sizeof(vtuner_net_message_t)*RECORDLEN);
 
-  while(dsd.status != DWS_FAILED) {
-    pthread_t dwt, dst;
-    tsdata_worker_data_t dwd;
+  while((app_status == APP_RUNNING) || (dsd.status != DWS_FAILED)) {
     vtuner_net_message_t msg;
 
     if( vts == VTS_DISCONNECTED ) {
@@ -499,22 +449,26 @@ int main(int argc, char **argv) {
 	if( modes == 1 ) {
           if (ioctl(vtuner_control, VTUNER_SET_TYPE, ctypes[0])) {
             ERROR("VTUNER_SET_TYPE failed - %m\n");
-            exit(1);
+            app_status = APP_FAILED;
+            break;
           }
 	} else {
           if( ioctl(vtuner_control, VTUNER_SET_NUM_MODES, modes) ) {
             ERROR("VTUNER_SET_NUM_MODES( %d ) failed - %m\n", modes);
-            exit(1);
+            app_status = APP_FAILED;
+            break;
           }
           if( ioctl(vtuner_control, VTUNER_SET_MODES, ctypes) ) {
             ERROR(" VTUNER_SET_MODES failed( %s, %s, %s ) - %m\n", ctypes[0], ctypes[1], ctypes[2]);
-            exit(1);
+            app_status = APP_FAILED;
+            break;
           }
 	}
 
         if (ioctl(vtuner_control, VTUNER_SET_FE_INFO, vtuner_info[mode])) {
           ERROR("VTUNER_SET_FE_INFO failed - %m\n");
-          exit(1);
+          app_status = APP_FAILED;
+          break;
         }
 
         DEBUGMAIN("Start discover worker for device type %x\n", types[mode]);
@@ -534,7 +488,8 @@ int main(int argc, char **argv) {
         vfd = socket(PF_INET, SOCK_STREAM, 0);
         if(vfd<0) {
           ERROR("Can't create server message socket - %m\n");
-          exit(1);
+          app_status = APP_FAILED;
+          break;
         }
         
         INFO("connect control socket to %s:%d\n", inet_ntoa(dsd.server_addr.sin_addr), ntohs(dsd.server_addr.sin_port));
@@ -597,7 +552,8 @@ int main(int argc, char **argv) {
       DEBUGMAIN("vtuner message!\n");
       if (ioctl(vtuner_control, VTUNER_GET_MESSAGE, &msg.u.vtuner)) {
         ERROR("VTUNER_GET_MESSAGE- %m\n");
-        exit(1);
+        app_status = APP_FAILED;
+        break;
       }
       // we need to save to msg_type here as hton works in place
       // so it's not save to access msg_type afterwards
@@ -612,7 +568,8 @@ int main(int argc, char **argv) {
         msg.u.vtuner.type = 0;
         if (ioctl(vtuner_control, VTUNER_SET_RESPONSE, &msg.u.vtuner)) {
           ERROR("VTUNER_SET_RESPONSE - %m\n");
-          exit(1);
+          app_status = APP_FAILED;
+          break;
         }
         // empty all recorded reconnecion information
         memset(&record, 0, sizeof(vtuner_net_message_t)*RECORDLEN);
@@ -691,7 +648,8 @@ int main(int argc, char **argv) {
           }
           if (ioctl(vtuner_control, VTUNER_SET_RESPONSE, &msg.u.vtuner)) {
             ERROR("VTUNER_SET_RESPONSE - %m\n");
-            exit(1);
+            app_status = APP_FAILED;
+            break;
           }
         }
         DEBUGMAIN("msg: %d completed\n", msg_type);
@@ -718,6 +676,24 @@ int main(int argc, char **argv) {
         } 
       }
     }
+  }
+
+  // if discovery is ongoing cancel it
+  if(dsd.status == DWS_RUNNING) {
+    DEBUGMAIN("discover thread is running, try to cancle it.\n");
+    pthread_cancel(dst);
+    pthread_join(dst, NULL);	  
+    DEBUGMAIN("discover thread terminated.\n");
+    dsd.status = DWS_IDLE;
+  }
+
+  // if tsdata worker ongoing cancel it
+  if(dwd.status == DWS_RUNNING) {
+    DEBUGMAIN("tsdata worker thread is running, try to cancle it.\n");
+    pthread_cancel(dwt);
+    pthread_join(dwt, NULL);	  
+    DEBUGMAIN("tsdata worker thread terminated.\n");
+    dwd.status = DST_EXITING;
   }
 
   return 0;
