@@ -1,17 +1,17 @@
 DBG_LEVEL ?= 0x000f
 USE_SYSLOG ?= 1
 CFLAGS=-DHAVE_DVB_API_VERSION=5 -g -fPIC -O2 -DDBG_LEVEL=$(DBG_LEVEL) -DUSE_SYSLOG=$(USE_SYSLOG)
-LDFLAGS=-lpthread -lrt
+LDLIBS=-lpthread -lrt
 DRIVER=vtuner-dvb-3
 VERSION ?= 0.0.0
 
 all: vtunerd vtunerc driver/vtunerc/dkms.conf
 
 vtunerd: vtunerd.c vtunerd-service.o vtuner-network.o vtuner-utils.o $(DRIVER).o
-	$(CC) $(CFLAGS) -o vtunerd vtuner-network.o vtunerd-service.o $(DRIVER).o vtuner-utils.o vtunerd.c $(LDFLAGS) 
+	$(CC) $(CFLAGS) -o vtunerd vtuner-network.o vtunerd-service.o $(DRIVER).o vtuner-utils.o vtunerd.c $(LDLIBS) 
 
 vtunerc: vtunerc.c vtuner-network.o vtuner-utils.o
-	$(CC) $(CFLAGS) -o vtunerc vtuner-network.o vtuner-utils.o vtunerc.c $(LDFLAGS)
+	$(CC) $(CFLAGS) -o vtunerc vtuner-network.o vtuner-utils.o vtunerc.c $(LDLIBS)
 
 vtunerd-service.o: vtunerd-service.c vtunerd-service.h
 	$(CC) $(CFLAGS) -c -o vtunerd-service.o vtunerd-service.c
